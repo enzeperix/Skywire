@@ -1,1 +1,1 @@
-# Skywire
+# Skywire scripts for Armbian 
