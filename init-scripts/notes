@@ -1,0 +1,9 @@
+#In order for the skywire-node to start properly on the current machine, we need to run its  init script after the skywire-manager is up. 
+#To make sure skywire-manager is already up we decided to start the skywire-node as the last process at boot.
+#Therefore we have to create a custom Target named "custom.target" and place it in "/etc/systemd/system/" directory, then create an new unit file 
+#for our skywire-node service named "skywire-node.service" and place it in "/etc/systemd/system/custom.target.wants" directory.
+#After this we need to make our new target default so we issue the commands below:
+
+systemctl list-units --type target --all     					 # Should show us the complete list of available targets, with our custom.target being inactive
+systemctl isolate custom.target  	      					 # Will switch our current target to our custom.target
+ln -sf /etc/systemd/system/custom.target /etc/systemd/system/default.target      # Will switch our custom target to the default. 

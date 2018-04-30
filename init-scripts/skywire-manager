@@ -1,0 +1,68 @@
+#!/bin/bash -
+### BEGIN INIT INFO
+# Provides:          Skywire manager
+# Required-Start:    $remote_fs $syslog $local_fs
+# Required-Stop:     $remote_fs $syslog $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start Skywire manager daemon at boot time
+# Description:       Enable service provided by daemon.
+### END INIT INFO
+
+GR='\033[0;32m'
+YE='\033[1;33m'
+RE='\033[0;31m'
+NC='\033[0m'     
+
+DAEMONOPTS="-web-dir /root/go/src/github.com/skycoin/skywire/static/skywire-manager" 
+DAEMON_LOG="/var/log/skywire-manager.log"
+NAME=skywire-manager
+PIDFILE=/var/run/$NAME.pid
+SCRIPTNAME=/etc/init.d/$NAME
+
+case "$1" in
+start)
+	echo -e "${GR}Starting $NAME ...${NC}"
+	PID=`/root/go/bin/manager $DAEMONOPTS >> $DAEMON_LOG 2>&1 & echo $!`
+	echo "Saving PID" $PID " to " $PIDFILE
+        if [ -z $PID ]; then
+            echo -e "\n" "${RE}Fail ! ${NC}"
+        else
+            echo $PID > $PIDFILE
+            echo -e "\n" "${GR}OK${NC}"
+        fi
+;;
+status)
+        echo -e "${YE}Checking $NAME ...${NC}"
+        if [ -f $PIDFILE ]; then
+            PID=`cat $PIDFILE`
+            if [ -z "`ps axf | grep ${PID} | grep -v grep`" ]; then
+                echo -e "\n" "${YE}Process dead but pidfile exists${NC}"
+            else
+                echo -e "\n" "${GR} Running ${NC}"
+            fi
+        else
+            echo -e  "\n" "${RE}Service not running${NC}"
+        fi
+;;
+stop)
+        echo -e "\n" "${GR}Stopping $NAME ...${NC}"
+            PID=`cat $PIDFILE`
+        if [ -f $PIDFILE ]; then
+            kill -HUP $PID
+            echo -e "\n" "${GR}OK${NC}"
+            rm -f $PIDFILE
+        else
+            echo -e "\n" "${YE} pidfile not found${NC}"
+        fi
+;;
+
+restart)
+  	$0 stop
+  	$0 start
+;;
+
+*)
+        echo -e "${YE} Usage: $0 {status|start|stop|restart} ${NC}"
+        exit 1
+esac
